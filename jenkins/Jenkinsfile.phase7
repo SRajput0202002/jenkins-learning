@@ -1,0 +1,65 @@
+// PHASE 7 — Adds Backend Test stage (pytest)
+// Copy from phase5 stages + Backend Test below.
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Workspace Inspection') {
+            steps {
+                sh 'pwd && ls -la'
+            }
+        }
+
+        stage('Python Version') {
+            steps { sh 'python3 --version' }
+        }
+
+        stage('Node Version') {
+            steps {
+                sh 'node --version'
+                sh 'npm --version'
+            }
+        }
+
+        stage('Frontend Dependencies') {
+            steps {
+                dir('frontend') { sh 'npm ci' }
+            }
+        }
+
+        stage('Frontend Build') {
+            steps {
+                dir('frontend') { sh 'npm run build' }
+            }
+        }
+
+        stage('Backend Dependencies') {
+            steps {
+                dir('backend') {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install -r requirements.txt
+                    '''
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Backend Test — pytest exits non-zero on failure → stage FAIL → pipeline stops
+        // Enterprise: publish JUnit XML, parallel test shards, coverage gates.
+        // ---------------------------------------------------------------------
+        stage('Backend Test') {
+            steps {
+                dir('backend') {
+                    sh '. .venv/bin/activate && pytest -v'
+                }
+            }
+        }
+    }
+}

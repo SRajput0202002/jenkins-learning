@@ -1,0 +1,22 @@
+# Single Jenkins for this project — UI: http://localhost:8080
+# Stop any other container using 8080 before: docker stop jenkins jenkins-learning
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: fastapi-react-jenkins-demo/jenkins:local
+    container_name: jenkins
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:

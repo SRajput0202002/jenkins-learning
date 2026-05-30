@@ -1,0 +1,123 @@
+// Build, test, Docker build, and deploy on host — no Docker Hub push required.
+// Job: Pipeline from SCM → Script Path: jenkins/Jenkinsfile.phase-deploy-local
+
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        DOCKERHUB_USER = 'local'
+        VITE_API_URL = 'http://localhost:8000'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Workspace Inspection') {
+            steps {
+                sh 'pwd && ls -la frontend backend'
+            }
+        }
+
+        stage('Python Version') {
+            steps { sh 'python3 --version' }
+        }
+
+        stage('Node Version') {
+            steps {
+                sh 'node --version'
+                sh 'npm --version'
+            }
+        }
+
+        stage('Frontend Dependencies') {
+            steps {
+                dir('frontend') { sh 'npm ci' }
+            }
+        }
+
+        stage('Frontend Build') {
+            steps {
+                dir('frontend') { sh 'npm run build' }
+            }
+        }
+
+        stage('Backend Dependencies') {
+            steps {
+                dir('backend') {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                    '''
+                }
+            }
+        }
+
+        stage('Frontend Test') {
+            steps {
+                dir('frontend') { sh 'npm test -- --run' }
+            }
+        }
+
+        stage('Backend Test') {
+            steps {
+                dir('backend') {
+                    sh '. .venv/bin/activate && pytest -v'
+                }
+            }
+        }
+
+        stage('Build Backend Docker') {
+            steps {
+                sh "docker build -t ${DOCKERHUB_USER}/backend:${IMAGE_TAG} ./backend"
+            }
+        }
+
+        stage('Build Frontend Docker') {
+            steps {
+                sh """
+                    docker build \\
+                      --build-arg VITE_API_URL=${VITE_API_URL} \\
+                      -t ${DOCKERHUB_USER}/frontend:${IMAGE_TAG} \\
+                      ./frontend
+                """
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    export IMAGE_TAG=${IMAGE_TAG}
+                    export DOCKERHUB_USER=${DOCKERHUB_USER}
+                    export VITE_API_URL=${VITE_API_URL}
+                    docker compose -f docker-compose.yml down || true
+                    docker compose -f docker-compose.yml up -d --build
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                    sleep 8
+                    curl -sf http://localhost:8000/health | grep -q ok
+                    curl -sf -o /dev/null -w "%{http_code}" http://localhost:8082 | grep -q 200
+                    echo "Deploy OK — backend :8000, frontend :8082"
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployed build ${env.BUILD_NUMBER}. App: http://localhost:8082"
+        }
+        failure {
+            echo 'Failed — open Console Output and find the first red stage.'
+        }
+    }
+}

@@ -1,0 +1,116 @@
+// =============================================================================
+// PHASE 5 — First Jenkins Pipeline (Declarative)
+// =============================================================================
+// Purpose: Learn checkout, workspace, tool versions, and build dependencies.
+// Point Jenkins job "Script Path" to: jenkins/Jenkinsfile.phase5
+// =============================================================================
+
+pipeline {
+    agent any
+
+    stages {
+        // ---------------------------------------------------------------------
+        // Stage 1: Checkout Code
+        // Purpose: Download source from Git (GitHub) into Jenkins workspace.
+        // Input:  SCM config (repo URL, branch) on the Jenkins job.
+        // Output: Files under $WORKSPACE (frontend/, backend/, etc.)
+        // Failure: Invalid repo URL, auth failure, branch missing.
+        // Debug:   Job config → Pipeline → check Git URL and credentials.
+        // ---------------------------------------------------------------------
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 2: Workspace Inspection
+        // Purpose: Prove what Jenkins actually downloaded.
+        // Input:  Checked-out workspace.
+        // Output: pwd + ls in console log.
+        // Failure: Rare (unless workspace disk full).
+        // Debug:   Compare log listing to your GitHub repo tree.
+        // ---------------------------------------------------------------------
+        stage('Workspace Inspection') {
+            steps {
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'ls -la frontend backend || true'
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 3: Python Version
+        // Purpose: Verify agent has Python for backend stages.
+        // ---------------------------------------------------------------------
+        stage('Python Version') {
+            steps {
+                sh 'python3 --version'
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 4: Node Version
+        // Purpose: Verify agent has Node/npm for frontend stages.
+        // ---------------------------------------------------------------------
+        stage('Node Version') {
+            steps {
+                sh 'node --version'
+                sh 'npm --version'
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 5: Frontend Dependencies
+        // Purpose: Install npm packages (node_modules).
+        // Input:  frontend/package.json
+        // Output: frontend/node_modules
+        // Failure: Network, invalid package.json, registry down.
+        // Debug:   Re-run `npm ci` locally in frontend/.
+        // ---------------------------------------------------------------------
+        stage('Frontend Dependencies') {
+            steps {
+                dir('frontend') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 6: Frontend Build
+        // Purpose: Produce production static assets in frontend/dist.
+        // Input:  Source + node_modules
+        // Output: frontend/dist/
+        // Failure: Type/syntax errors, wrong script name (see Phase 6).
+        // Debug:   Run `npm run build` locally; read first error in log.
+        // ---------------------------------------------------------------------
+        stage('Frontend Build') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Stage 7: Backend Dependencies
+        // Purpose: Create venv and install Python packages.
+        // Input:  backend/requirements.txt
+        // Output: backend/.venv/
+        // Failure: Missing package, wrong Python version (Phase 6).
+        // Debug:   Activate venv locally and pip install -r requirements.txt
+        // ---------------------------------------------------------------------
+        stage('Backend Dependencies') {
+            steps {
+                dir('backend') {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                    '''
+                }
+            }
+        }
+    }
+}
