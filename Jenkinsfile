@@ -163,9 +163,11 @@ pipeline {
                 sh '''
                     echo "Waiting for services..."
                     sleep 8
-                    curl -sf http://localhost:8000/health | grep -q ok
-                    curl -sf -o /dev/null -w "%{http_code}" http://localhost:8082 | grep -q 200
-                    echo "Health checks passed"
+                    BACKEND_ID=$(docker compose -f docker-compose.yml ps -q backend)
+                    NETWORK=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$BACKEND_ID" | head -1)
+                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf http://backend:8000/health | grep -q ok
+                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf -o /dev/null -w "%{http_code}" http://frontend:80 | grep -q 200
+                    echo "Health checks passed (host: :8000 / :8082)"
                 '''
             }
         }

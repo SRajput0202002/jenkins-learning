@@ -91,6 +91,7 @@ pipeline {
                     pull_with_retry python:3.12-slim
                     pull_with_retry node:20-alpine
                     pull_with_retry nginx:alpine
+                    pull_with_retry curlimages/curl:8.12.1
                 '''
             }
         }
@@ -127,10 +128,14 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
+                    # App runs in separate containers; localhost inside Jenkins is NOT the app.
+                    # Hit services on the compose network (same as production-style checks).
                     sleep 8
-                    curl -sf http://localhost:8000/health | grep -q ok
-                    curl -sf -o /dev/null -w "%{http_code}" http://localhost:8082 | grep -q 200
-                    echo "Deploy OK — backend :8000, frontend :8082"
+                    BACKEND_ID=$(docker compose -f docker-compose.yml ps -q backend)
+                    NETWORK=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$BACKEND_ID" | head -1)
+                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf http://backend:8000/health | grep -q ok
+                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf -o /dev/null -w "%{http_code}" http://frontend:80 | grep -q 200
+                    echo "Deploy OK — on host: http://localhost:8000/health and http://localhost:8082"
                 '''
             }
         }
