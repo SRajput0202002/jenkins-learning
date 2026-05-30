@@ -71,6 +71,30 @@ pipeline {
             }
         }
 
+        // Pre-pull base images with retries (avoids transient Docker Hub EOF errors during build)
+        stage('Pull Docker Base Images') {
+            steps {
+                sh '''
+                    pull_with_retry() {
+                      img="$1"
+                      n=0
+                      until docker pull "$img"; do
+                        n=$((n + 1))
+                        if [ "$n" -ge 3 ]; then
+                          echo "Failed to pull $img after 3 attempts"
+                          exit 1
+                        fi
+                        echo "Retrying pull $img ($n/3)..."
+                        sleep 5
+                      done
+                    }
+                    pull_with_retry python:3.12-slim
+                    pull_with_retry node:20-alpine
+                    pull_with_retry nginx:alpine
+                '''
+            }
+        }
+
         stage('Build Backend Docker') {
             steps {
                 sh "docker build -t ${DOCKERHUB_USER}/backend:${IMAGE_TAG} ./backend"
