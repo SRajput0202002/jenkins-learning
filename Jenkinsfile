@@ -20,6 +20,7 @@ pipeline {
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         DOCKERHUB_USER = "${env.DOCKERHUB_USER ?: 'your-dockerhub-username'}"
         VITE_API_URL = 'http://localhost:8000'
+        APP_HOST = 'host.docker.internal'
     }
 
     stages {
@@ -163,11 +164,10 @@ pipeline {
                 sh '''
                     echo "Waiting for services..."
                     sleep 8
-                    BACKEND_ID=$(docker compose -f docker-compose.yml ps -q backend)
-                    NETWORK=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$BACKEND_ID" | head -1)
-                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf http://backend:8000/health | grep -q ok
-                    docker run --rm --network "$NETWORK" curlimages/curl:8.12.1 -sf -o /dev/null -w "%{http_code}" http://frontend:80 | grep -q 200
-                    echo "Health checks passed (host: :8000 / :8082)"
+                    BACKEND="${APP_HOST:-host.docker.internal}"
+                    curl -sf "http://${BACKEND}:8000/health" | grep -q ok
+                    curl -sf -o /dev/null -w "%{http_code}" "http://${BACKEND}:8082" | grep -q 200
+                    echo "Health checks passed"
                 '''
             }
         }
